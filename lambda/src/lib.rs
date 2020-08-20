@@ -130,7 +130,7 @@ pub struct HandlerFn<F> {
 impl<F, A, B, Error, Fut> Handler<A, B> for HandlerFn<F>
 where
     F: Fn(A, Context) -> Fut,
-    Fut: Future<Output = Result<B, Error>> + Send ,
+    Fut: Future<Output = Result<B, Error>> + Send,
     Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>> + fmt::Display,
 {
     type Error = Error;
@@ -170,6 +170,7 @@ where
         &self,
         incoming: impl Stream<Item = Result<http::Response<hyper::Body>, Error>> + Send,
         handler: F,
+        config: &Config,
     ) -> Result<(), Error>
     where
         F: Handler<A, B> + Send + Sync + 'static,
@@ -186,7 +187,9 @@ where
             let event = event?;
             let (parts, body) = event.into_parts();
 
-            let ctx: Context = Context::try_from(parts.headers)?;
+            let ctx: Context = Context::try_from(parts.headers)
+                .expect("Unable to get Context from http headers")
+                .with_config(config);
             let body = hyper::body::to_bytes(body).await?;
             trace!("{}", std::str::from_utf8(&body)?); // this may be very verbose
             let body = serde_json::from_slice(&body)?;
@@ -328,23 +331,23 @@ where
 pub async fn run<A, B, F>(handler: F) -> Result<(), Error>
 where
     F: Handler<A, B> + Send + Sync + 'static,
-    <F as Handler<A, B>>::Fut: Future<Output = Result<B, <F as Handler<A, B>>::Error>> + Send  + 'static,
+    <F as Handler<A, B>>::Fut: Future<Output = Result<B, <F as Handler<A, B>>::Error>> + Send + 'static,
     <F as Handler<A, B>>::Error: fmt::Display + Send + Sync + 'static,
     A: for<'de> Deserialize<'de> + Send + Sync + 'static,
     B: Serialize + Send + Sync + 'static,
 {
     trace!("Loading config from env");
     let config = Config::from_env()?;
-    let uri = config.endpoint.try_into().expect("Unable to convert to URL");
+    let uri = config.endpoint.as_str().try_into().expect("Unable to convert to URL");
     let runtime = Runtime::builder()
         .with_connector(HttpConnector::new())
         .with_endpoint(uri)
         .build()
-        .expect("Unable create runtime");
+        .expect("Unable to create runtime");
 
     let client = &runtime.client;
     let incoming = incoming(client);
-    runtime.run(incoming, handler).await
+    runtime.run(incoming, handler, &config).await
 }
 
 fn type_name_of_val<T>(_: T) -> &'static str {

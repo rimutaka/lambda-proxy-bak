@@ -141,3 +141,13 @@ impl TryFrom<HeaderMap> for Context {
         Ok(ctx)
     }
 }
+
+impl Context {
+    /// Add environment details to the context by setting `env_config`.
+    pub fn with_config(self, config: &Config) -> Self {
+        Self {
+            env_config: config.clone(),
+            ..self
+        }
+    }
+}
