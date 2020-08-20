@@ -71,7 +71,7 @@ use types::Diagnostic;
 pub(crate) type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// Configuration derived from environment variables.
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     /// The host and port of the [runtime API](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html).
     pub endpoint: String,
